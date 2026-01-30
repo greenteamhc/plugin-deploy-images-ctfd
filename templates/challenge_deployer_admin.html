@@ -1,0 +1,162 @@
+{% extends "admin/base.html" %}
+
+{% block content %}
+<div class="jumbotron">
+    <div class="container">
+        <h1>Challenge Deployer</h1>
+        <p class="lead">Gerenciador de Deploy de Desafios para Registry</p>
+    </div>
+</div>
+
+<div class="container">
+    <!-- Deploy Form -->
+    <div class="row">
+        <div class="col-md-12">
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h3>Criar Novo Desafio</h3>
+                </div>
+                <div class="card-body">
+                    <form id="deploy-form">
+                        <div class="form-row">
+                            <div class="form-group col-md-6">
+                                <label for="challenge_name">Nome do Desafio *</label>
+                                <input type="text" class="form-control" id="challenge_name" 
+                                       placeholder="web01" required 
+                                       pattern="[a-zA-Z0-9_-]+"
+                                       title="Apenas letras, números, - e _">
+                                <small class="form-text text-muted">Nome único para o desafio (ex: web01, pwn_easy)</small>
+                            </div>
+                            <div class="form-group col-md-6">
+                                <label for="docker_image">Imagem Docker *</label>
+                                <input type="text" class="form-control" id="docker_image" 
+                                       placeholder="lukerking/sqli:latest" required>
+                                <small class="form-text text-muted">Imagem do Docker Hub (ex: usuario/imagem:tag)</small>
+                            </div>
+                        </div>
+
+                        <div class="form-row">
+                            <div class="form-group col-md-4">
+                                <label for="internal_port">Porta Interna *</label>
+                                <input type="number" class="form-control" id="internal_port" 
+                                       placeholder="80" required min="1" max="65535">
+                                <small class="form-text text-muted">Porta do container (1-65535)</small>
+                            </div>
+                            <div class="form-group col-md-4">
+                                <label for="protocol">Protocolo</label>
+                                <select class="form-control" id="protocol">
+                                    <option value="tcp">TCP</option>
+                                    <option value="udp">UDP</option>
+                                </select>
+                            </div>
+                            <div class="form-group col-md-4">
+                                <label for="hostname">Hostname</label>
+                                <input type="text" class="form-control" id="hostname" 
+                                       placeholder="desafios.ctfgthc.com.br" 
+                                       value="desafios.ctfgthc.com.br">
+                            </div>
+                        </div>
+
+                        <div class="form-row">
+                            <div class="form-group col-md-12">
+                                <label for="registry">Registry URL</label>
+                                <input type="text" class="form-control" id="registry" 
+                                       placeholder="localhost:5000/" 
+                                       value="localhost:5000/">
+                                <small class="form-text text-muted">URL do registry (deve terminar com /)</small>
+                            </div>
+                        </div>
+
+                        <div class="form-group">
+                            <button type="submit" class="btn btn-primary" id="deploy-btn">
+                                <i class="fas fa-rocket"></i> Criar e Deploy
+                            </button>
+                            <button type="reset" class="btn btn-secondary">
+                                <i class="fas fa-redo"></i> Limpar
+                            </button>
+                        </div>
+                    </form>
+
+                    <!-- Deploy Output -->
+                    <div id="deploy-output" class="mt-4" style="display: none;">
+                        <hr>
+                        <h5>Resultado do Deploy</h5>
+                        <div id="deploy-message" class="alert"></div>
+                        <div id="deploy-registry-url" style="display: none;">
+                            <label><strong>Registry URL:</strong></label>
+                            <div class="input-group">
+                                <input type="text" class="form-control" id="registry-url-output" readonly>
+                                <div class="input-group-append">
+                                    <button class="btn btn-outline-secondary" type="button" onclick="copyToClipboard()">
+                                        <i class="fas fa-copy"></i> Copiar
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                        <div id="build-output-container" style="display: none;" class="mt-3">
+                            <label><strong>Output do Build:</strong></label>
+                            <pre id="build-output" class="bg-dark text-light p-3" style="max-height: 300px; overflow-y: auto;"></pre>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- List of Deployed Challenges -->
+    <div class="row">
+        <div class="col-md-12">
+            <div class="card">
+                <div class="card-header">
+                    <h3>Desafios Deployados</h3>
+                    <button class="btn btn-sm btn-info float-right" onclick="loadChallenges()">
+                        <i class="fas fa-sync"></i> Atualizar
+                    </button>
+                </div>
+                <div class="card-body">
+                    <div id="challenges-loading" class="text-center">
+                        <i class="fas fa-spinner fa-spin"></i> Carregando...
+                    </div>
+                    <div id="challenges-list" style="display: none;">
+                        <table class="table table-striped">
+                            <thead>
+                                <tr>
+                                    <th>Nome</th>
+                                    <th>Diretório</th>
+                                    <th>Ações</th>
+                                </tr>
+                            </thead>
+                            <tbody id="challenges-tbody">
+                            </tbody>
+                        </table>
+                    </div>
+                    <div id="challenges-empty" class="alert alert-info" style="display: none;">
+                        Nenhum desafio encontrado.
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    .jumbotron {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        margin-bottom: 2rem;
+    }
+    
+    .card {
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        margin-bottom: 1rem;
+    }
+    
+    #build-output {
+        font-family: 'Courier New', monospace;
+        font-size: 0.85rem;
+        border-radius: 4px;
+    }
+</style>
+
+<script src="{{ url_for('challenge_deployer_admin.static', filename='challenge_deployer.js') }}"></script>
+{% endblock %}
