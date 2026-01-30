@@ -1,5 +1,6 @@
 {
-  "name": "challenge_deployer",
-  "route": "/admin/challenge-deployer",
-  "version": "1.0.0"
+  "name": "Deploy de Desafios",
+  "route": "/admin/deploy-desafios",
+  "version": "1.0.0",
+  "description": "Plugin para deploy automatizado de desafios usando chall-manager"
 }

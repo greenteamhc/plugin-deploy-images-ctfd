@@ -1,0 +1,428 @@
+{% extends "admin/base.html" %}
+
+{% block content %}
+<div class="jumbotron">
+    <div class="container">
+        <h1><i class="fas fa-rocket"></i> Deploy de Desafios</h1>
+        <p class="lead">Gerenciador de Deploy de Desafios para Registry (chall-manager)</p>
+    </div>
+</div>
+
+<div class="container">
+    <!-- AVISO IMPORTANTE -->
+    <div class="row mb-4">
+        <div class="col-md-12">
+            <div class="alert alert-danger" role="alert">
+                <h4 class="alert-heading"><i class="fas fa-exclamation-triangle"></i> ATENÇÃO!</h4>
+                <p class="mb-0"><strong>SAIBA O QUE ESTÁ FAZENDO ANTES DE UTILIZAR ESTE PLUGIN</strong></p>
+                <hr>
+                <p class="mb-0">Este plugin executa comandos no servidor e faz upload para o registry. Use com responsabilidade.</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Deploy Form -->
+    <div class="row">
+        <div class="col-md-12">
+            <div class="card mb-4">
+                <div class="card-header bg-primary text-white">
+                    <h3 class="mb-0"><i class="fas fa-plus-circle"></i> Criar Novo Desafio</h3>
+                </div>
+                <div class="card-body">
+                    <form id="deploy-form">
+                        <div class="form-row">
+                            <div class="form-group col-md-6">
+                                <label for="challenge_name"><strong>Nome do Desafio *</strong></label>
+                                <input type="text" class="form-control" id="challenge_name" 
+                                       placeholder="sqli" required 
+                                       pattern="[a-zA-Z0-9_-]+"
+                                       title="Apenas letras, números, - e _">
+                                <small class="form-text text-muted">Nome único para o desafio (ex: sqli, xss_easy, pwn01)</small>
+                            </div>
+                            <div class="form-group col-md-6">
+                                <label for="docker_image"><strong>Imagem Docker *</strong></label>
+                                <input type="text" class="form-control" id="docker_image" 
+                                       placeholder="lukerking/sqli:latest" required>
+                                <small class="form-text text-muted">Imagem do Docker Hub (ex: usuario/imagem:tag)</small>
+                            </div>
+                        </div>
+
+                        <div class="form-row">
+                            <div class="form-group col-md-4">
+                                <label for="internal_port"><strong>Porta Interna *</strong></label>
+                                <input type="number" class="form-control" id="internal_port" 
+                                       placeholder="80" required min="1" max="65535">
+                                <small class="form-text text-muted">Porta exposta pelo container (1-65535)</small>
+                            </div>
+                            <div class="form-group col-md-4">
+                                <label for="protocol"><strong>Protocolo</strong></label>
+                                <select class="form-control" id="protocol">
+                                    <option value="tcp">TCP</option>
+                                    <option value="udp">UDP</option>
+                                </select>
+                            </div>
+                            <div class="form-group col-md-4">
+                                <label for="hostname"><strong>Hostname</strong></label>
+                                <input type="text" class="form-control" id="hostname" 
+                                       placeholder="desafios.ctfgthc.com.br" 
+                                       value="desafios.ctfgthc.com.br">
+                                <small class="form-text text-muted">Domínio onde os desafios rodam</small>
+                            </div>
+                        </div>
+
+                        <div class="form-row">
+                            <div class="form-group col-md-12">
+                                <label for="registry"><strong>Registry URL</strong></label>
+                                <input type="text" class="form-control" id="registry" 
+                                       placeholder="localhost:5000/" 
+                                       value="localhost:5000/">
+                                <small class="form-text text-muted">URL do registry local (deve terminar com /)</small>
+                            </div>
+                        </div>
+
+                        <div class="form-group">
+                            <button type="submit" class="btn btn-success btn-lg" id="deploy-btn">
+                                <i class="fas fa-rocket"></i> Criar e Fazer Deploy
+                            </button>
+                            <button type="reset" class="btn btn-secondary">
+                                <i class="fas fa-redo"></i> Limpar
+                            </button>
+                        </div>
+                    </form>
+
+                    <!-- Deploy Output -->
+                    <div id="deploy-output" class="mt-4" style="display: none;">
+                        <hr>
+                        <h5><i class="fas fa-terminal"></i> Resultado do Deploy</h5>
+                        <div id="deploy-message" class="alert"></div>
+                        
+                        <div id="deploy-registry-url" style="display: none;">
+                            <div class="card bg-light mb-3">
+                                <div class="card-header"><strong>Registry URL (Output):</strong></div>
+                                <div class="card-body">
+                                    <div class="input-group">
+                                        <input type="text" class="form-control font-weight-bold" id="registry-url-output" readonly>
+                                        <div class="input-group-append">
+                                            <button class="btn btn-primary" type="button" onclick="copyToClipboard()">
+                                                <i class="fas fa-copy"></i> Copiar
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- AVISO IMPORTANTE SOBRE REGISTRO -->
+                            <div class="alert alert-warning">
+                                <h5 class="alert-heading"><i class="fas fa-info-circle"></i> IMPORTANTE - Na hora de registrar o desafio:</h5>
+                                <p>DEPOIS DE FEITO O UPLOAD NO REGISTRY APARECERÁ:</p>
+                                <code class="d-block mb-2 p-2 bg-dark text-light">localhost:5000/gthc/sqli</code>
+                                <p class="mt-2"><strong>MAS NA HORA QUE FOR REGISTRAR, REGISTRE COMO:</strong></p>
+                                <code class="d-block p-2 bg-success text-white font-weight-bold">registry:5000/gthc/sqli</code>
+                                <hr>
+                                <p class="mb-0 small">Isso porque dentro da rede Docker, o registry é acessado pelo nome do serviço <code>registry</code>, não por <code>localhost</code>.</p>
+                            </div>
+                        </div>
+                        
+                        <div id="build-output-container" style="display: none;" class="mt-3">
+                            <label><strong><i class="fas fa-code"></i> Output do Build:</strong></label>
+                            <pre id="build-output" class="bg-dark text-light p-3"></pre>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- List of Deployed Challenges -->
+    <div class="row">
+        <div class="col-md-12">
+            <div class="card">
+                <div class="card-header bg-secondary text-white d-flex justify-content-between align-items-center">
+                    <h3 class="mb-0"><i class="fas fa-list"></i> Desafios Deployados</h3>
+                    <button class="btn btn-light btn-sm" onclick="loadChallenges()">
+                        <i class="fas fa-sync"></i> Atualizar Lista
+                    </button>
+                </div>
+                <div class="card-body">
+                    <div id="challenges-loading" class="text-center py-4">
+                        <i class="fas fa-spinner fa-spin fa-2x"></i>
+                        <p class="mt-2">Carregando desafios...</p>
+                    </div>
+                    <div id="challenges-list" style="display: none;">
+                        <table class="table table-striped table-hover">
+                            <thead class="thead-dark">
+                                <tr>
+                                    <th><i class="fas fa-flag"></i> Nome</th>
+                                    <th><i class="fas fa-folder"></i> Diretório</th>
+                                    <th><i class="fas fa-cogs"></i> Ações</th>
+                                </tr>
+                            </thead>
+                            <tbody id="challenges-tbody">
+                            </tbody>
+                        </table>
+                    </div>
+                    <div id="challenges-empty" class="alert alert-info" style="display: none;">
+                        <i class="fas fa-info-circle"></i> Nenhum desafio encontrado. Crie um novo acima!
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    .jumbotron {
+        background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+        color: white;
+        margin-bottom: 2rem;
+        border-bottom: 3px solid #e94560;
+    }
+    
+    .card {
+        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        margin-bottom: 1rem;
+        border: none;
+    }
+    
+    .card-header {
+        font-weight: bold;
+    }
+    
+    #build-output {
+        font-family: 'Courier New', Consolas, monospace;
+        font-size: 0.85rem;
+        border-radius: 4px;
+        max-height: 400px;
+        overflow-y: auto;
+        white-space: pre-wrap;
+        word-wrap: break-word;
+    }
+    
+    .btn-success {
+        background-color: #28a745;
+        border-color: #28a745;
+    }
+    
+    .btn-success:hover {
+        background-color: #218838;
+        border-color: #1e7e34;
+    }
+    
+    .alert-danger {
+        border-left: 4px solid #dc3545;
+    }
+    
+    .alert-warning {
+        border-left: 4px solid #ffc107;
+    }
+    
+    code {
+        font-size: 1rem;
+    }
+</style>
+
+<script>
+// Challenge Deployer JavaScript
+
+document.addEventListener('DOMContentLoaded', function() {
+    loadChallenges();
+    
+    const form = document.getElementById('deploy-form');
+    form.addEventListener('submit', handleDeploy);
+});
+
+async function handleDeploy(e) {
+    e.preventDefault();
+    
+    const btn = document.getElementById('deploy-btn');
+    const originalText = btn.innerHTML;
+    
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Deployando... (pode demorar)';
+    
+    document.getElementById('deploy-output').style.display = 'none';
+    
+    const data = {
+        challenge_name: document.getElementById('challenge_name').value.trim(),
+        docker_image: document.getElementById('docker_image').value.trim(),
+        internal_port: document.getElementById('internal_port').value,
+        protocol: document.getElementById('protocol').value,
+        hostname: document.getElementById('hostname').value.trim(),
+        registry: document.getElementById('registry').value.trim()
+    };
+    
+    try {
+        const response = await fetch('/admin/deploy-desafios/api/deploy', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'CSRF-Token': window.init.csrfNonce || ''
+            },
+            body: JSON.stringify(data)
+        });
+        
+        const result = await response.json();
+        
+        document.getElementById('deploy-output').style.display = 'block';
+        
+        const messageDiv = document.getElementById('deploy-message');
+        const registryUrlDiv = document.getElementById('deploy-registry-url');
+        const buildOutputContainer = document.getElementById('build-output-container');
+        const buildOutputPre = document.getElementById('build-output');
+        
+        if (result.success) {
+            messageDiv.className = 'alert alert-success';
+            messageDiv.innerHTML = '<i class="fas fa-check-circle"></i> <strong>Sucesso!</strong> ' + result.message;
+            
+            registryUrlDiv.style.display = 'block';
+            document.getElementById('registry-url-output').value = result.registry_url;
+            
+            if (result.output) {
+                buildOutputContainer.style.display = 'block';
+                buildOutputPre.textContent = result.output;
+            }
+            
+            document.getElementById('deploy-form').reset();
+            document.getElementById('hostname').value = 'desafios.ctfgthc.com.br';
+            document.getElementById('registry').value = 'localhost:5000/';
+            
+            setTimeout(() => loadChallenges(), 1000);
+            
+        } else {
+            messageDiv.className = 'alert alert-danger';
+            messageDiv.innerHTML = '<i class="fas fa-exclamation-circle"></i> <strong>Erro:</strong> ' + result.error;
+            
+            registryUrlDiv.style.display = 'none';
+            
+            if (result.output) {
+                buildOutputContainer.style.display = 'block';
+                buildOutputPre.textContent = result.output;
+            }
+        }
+        
+    } catch (error) {
+        document.getElementById('deploy-output').style.display = 'block';
+        const messageDiv = document.getElementById('deploy-message');
+        messageDiv.className = 'alert alert-danger';
+        messageDiv.innerHTML = '<i class="fas fa-exclamation-triangle"></i> <strong>Erro de rede:</strong> ' + error.message;
+        
+        document.getElementById('deploy-registry-url').style.display = 'none';
+        document.getElementById('build-output-container').style.display = 'none';
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = originalText;
+    }
+}
+
+async function loadChallenges() {
+    const loadingDiv = document.getElementById('challenges-loading');
+    const listDiv = document.getElementById('challenges-list');
+    const emptyDiv = document.getElementById('challenges-empty');
+    
+    loadingDiv.style.display = 'block';
+    listDiv.style.display = 'none';
+    emptyDiv.style.display = 'none';
+    
+    try {
+        const response = await fetch('/admin/deploy-desafios/api/challenges', {
+            headers: {
+                'CSRF-Token': window.init.csrfNonce || ''
+            }
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            const challenges = result.challenges;
+            
+            if (challenges.length === 0) {
+                emptyDiv.style.display = 'block';
+            } else {
+                const tbody = document.getElementById('challenges-tbody');
+                tbody.innerHTML = '';
+                
+                challenges.forEach(challenge => {
+                    const row = document.createElement('tr');
+                    row.innerHTML = `
+                        <td><strong><i class="fas fa-flag text-primary"></i> ${escapeHtml(challenge.name)}</strong></td>
+                        <td><code>${escapeHtml(challenge.path)}</code></td>
+                        <td>
+                            <button class="btn btn-sm btn-danger" onclick="deleteChallenge('${escapeHtml(challenge.name)}')">
+                                <i class="fas fa-trash"></i> Deletar
+                            </button>
+                        </td>
+                    `;
+                    tbody.appendChild(row);
+                });
+                
+                listDiv.style.display = 'block';
+            }
+        } else {
+            emptyDiv.innerHTML = '<i class="fas fa-exclamation-triangle"></i> Erro ao carregar: ' + result.error;
+            emptyDiv.className = 'alert alert-danger';
+            emptyDiv.style.display = 'block';
+        }
+        
+    } catch (error) {
+        emptyDiv.innerHTML = '<i class="fas fa-exclamation-triangle"></i> Erro de rede: ' + error.message;
+        emptyDiv.className = 'alert alert-danger';
+        emptyDiv.style.display = 'block';
+    } finally {
+        loadingDiv.style.display = 'none';
+    }
+}
+
+async function deleteChallenge(challengeName) {
+    if (!confirm(`Tem certeza que deseja deletar o desafio "${challengeName}"?\n\nIsso removerá apenas o diretório local, NÃO remove do registry.`)) {
+        return;
+    }
+    
+    try {
+        const response = await fetch(`/admin/deploy-desafios/api/delete/${encodeURIComponent(challengeName)}`, {
+            method: 'DELETE',
+            headers: {
+                'CSRF-Token': window.init.csrfNonce || ''
+            }
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            alert('✅ ' + result.message);
+            loadChallenges();
+        } else {
+            alert('❌ Erro ao deletar: ' + result.error);
+        }
+        
+    } catch (error) {
+        alert('❌ Erro de rede: ' + error.message);
+    }
+}
+
+function copyToClipboard() {
+    const input = document.getElementById('registry-url-output');
+    input.select();
+    input.setSelectionRange(0, 99999);
+    
+    navigator.clipboard.writeText(input.value).then(() => {
+        const btn = event.target.closest('button');
+        const originalHTML = btn.innerHTML;
+        btn.innerHTML = '<i class="fas fa-check"></i> Copiado!';
+        btn.classList.add('btn-success');
+        btn.classList.remove('btn-primary');
+        
+        setTimeout(() => {
+            btn.innerHTML = originalHTML;
+            btn.classList.remove('btn-success');
+            btn.classList.add('btn-primary');
+        }, 2000);
+    });
+}
+
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+</script>
+{% endblock %}

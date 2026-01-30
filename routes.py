@@ -1,31 +1,34 @@
 import os
+import re
 import subprocess
 import shutil
 from flask import Blueprint, render_template, request, jsonify
 from CTFd.utils.decorators import admins_only
-from CTFd.utils import get_config
-from pathlib import Path
 
-admin_bp = Blueprint(
-    'challenge_deployer',
+# Blueprint com nome único e correto
+deploy_bp = Blueprint(
+    'deploy_desafios',
     __name__,
     template_folder='templates',
     static_folder='assets',
-    url_prefix='/admin/challenge-deployer'
+    url_prefix='/admin/deploy-desafios'
 )
 
 CHALL_MANAGER_BASE = "/opt/ctfd-chall-manager/hack/desafios"
 EXAMPLE_DIR = os.path.join(CHALL_MANAGER_BASE, "example")
 
+# Regex para validar nome do desafio (segurança)
+VALID_NAME_PATTERN = re.compile(r'^[a-zA-Z0-9_-]+$')
 
-@admin_bp.route('/')
+
+@deploy_bp.route('/')
 @admins_only
 def admin_view():
     """Admin page to manage challenge deployments"""
-    return render_template('challenge_deployer/challenge_deployer_admin.html')
+    return render_template('deploy_desafios/admin.html')
 
 
-@admin_bp.route('/api/challenges', methods=['GET'])
+@deploy_bp.route('/api/challenges', methods=['GET'])
 @admins_only
 def list_challenges():
     """List all deployed challenges"""
@@ -44,7 +47,7 @@ def list_challenges():
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
-@admin_bp.route('/api/deploy', methods=['POST'])
+@deploy_bp.route('/api/deploy', methods=['POST'])
 @admins_only
 def deploy_challenge():
     """
@@ -71,12 +74,44 @@ def deploy_challenge():
                     'error': f'Campo obrigatório: {field}'
                 }), 400
         
-        challenge_name = data['challenge_name']
-        docker_image = data['docker_image']
-        internal_port = data['internal_port']
-        hostname = data.get('hostname', 'desafios.ctfgthc.com.br')
-        protocol = data.get('protocol', 'tcp')
-        registry = data.get('registry', 'localhost:5000/')
+        challenge_name = data['challenge_name'].strip()
+        docker_image = data['docker_image'].strip()
+        internal_port = str(data['internal_port']).strip()
+        hostname = data.get('hostname', 'desafios.ctfgthc.com.br').strip()
+        protocol = data.get('protocol', 'tcp').strip()
+        registry = data.get('registry', 'localhost:5000/').strip()
+        
+        # VALIDAÇÃO DE SEGURANÇA: Nome do desafio
+        if not VALID_NAME_PATTERN.match(challenge_name):
+            return jsonify({
+                'success': False,
+                'error': 'Nome do desafio inválido. Use apenas letras, números, - e _'
+            }), 400
+        
+        # VALIDAÇÃO DE SEGURANÇA: Impedir path traversal
+        if '..' in challenge_name or '/' in challenge_name:
+            return jsonify({
+                'success': False,
+                'error': 'Nome do desafio contém caracteres inválidos'
+            }), 400
+        
+        # VALIDAÇÃO DE SEGURANÇA: Porta válida
+        try:
+            port_int = int(internal_port)
+            if port_int < 1 or port_int > 65535:
+                raise ValueError("Porta fora do range")
+        except ValueError:
+            return jsonify({
+                'success': False,
+                'error': 'Porta interna deve ser um número entre 1 e 65535'
+            }), 400
+        
+        # VALIDAÇÃO DE SEGURANÇA: Protocolo válido
+        if protocol not in ['tcp', 'udp']:
+            return jsonify({
+                'success': False,
+                'error': 'Protocolo deve ser tcp ou udp'
+            }), 400
         
         # Ensure registry ends with /
         if not registry.endswith('/'):
@@ -149,7 +184,7 @@ def deploy_challenge():
         }), 500
 
 
-@admin_bp.route('/api/delete/<challenge_name>', methods=['DELETE'])
+@deploy_bp.route('/api/delete/<challenge_name>', methods=['DELETE'])
 @admins_only
 def delete_challenge(challenge_name):
     """Delete a challenge directory"""
