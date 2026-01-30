@@ -1,0 +1,5 @@
+{
+  "name": "challenge_deployer",
+  "route": "/admin/challenge-deployer",
+  "version": "1.0.0"
+}

@@ -7,7 +7,7 @@ from CTFd.utils import get_config
 from pathlib import Path
 
 admin_bp = Blueprint(
-    'challenge_deployer_admin',
+    'challenge_deployer',
     __name__,
     template_folder='templates',
     static_folder='assets',
@@ -22,7 +22,7 @@ EXAMPLE_DIR = os.path.join(CHALL_MANAGER_BASE, "example")
 @admins_only
 def admin_view():
     """Admin page to manage challenge deployments"""
-    return render_template('challenge_deployer_admin.html')
+    return render_template('challenge_deployer/challenge_deployer_admin.html')
 
 
 @admin_bp.route('/api/challenges', methods=['GET'])
