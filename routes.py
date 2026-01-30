@@ -10,7 +10,6 @@ deploy_bp = Blueprint(
     'deploy_desafios',
     __name__,
     template_folder='templates',
-    static_folder='assets',
     url_prefix='/admin/deploy-desafios'
 )
 
